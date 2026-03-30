@@ -1,5 +1,7 @@
 # urlspider
 
+![urlspider preview](https://raw.githubusercontent.com/bud1mu/urlspider/main/images/preview.png)
+
 Fast recursive endpoint crawler for a target URL, scoped to the same base domain and its subdomains.
 
 `urlspider` requests a starting URL, extracts URL candidates from `href` and `src`, normalizes relative paths to absolute URLs, and keeps crawling deeper while staying inside scope. It also scans textual responses such as HTML, JS, CSS, JSON, and XML for more URLs.
