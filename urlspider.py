@@ -228,7 +228,8 @@ class UrlSpider:
         max_pages: int,
         concurrency: int,
         timeout: float,
-        match_keywords: tuple[str, ...],
+        match_url_keywords: tuple[str, ...],
+        match_content_keywords: tuple[str, ...],
         exclude_keywords: tuple[str, ...],
         quiet_interesting: bool,
     ) -> None:
@@ -240,7 +241,8 @@ class UrlSpider:
         self.max_pages = max_pages
         self.concurrency = concurrency
         self.timeout = timeout
-        self.match_keywords = match_keywords
+        self.match_url_keywords = match_url_keywords
+        self.match_content_keywords = match_content_keywords
         self.exclude_keywords = exclude_keywords
         self.quiet_interesting = quiet_interesting
         self.user_agents = load_user_agents(AGENT_FILE)
@@ -266,10 +268,22 @@ class UrlSpider:
         self.enqueued.add(url)
         await self.queue.put(CrawlJob(url=url, depth=depth))
 
-    async def emit(self, url: str, interesting: bool | None = None) -> None:
+    async def emit(self, url: str, text: str | None = None, interesting: bool | None = None) -> None:
         lowered = url.lower()
-        if self.match_keywords and not any(keyword in lowered for keyword in self.match_keywords):
-            return
+        url_matches = True
+        content_matches = True
+
+        if self.match_url_keywords:
+            url_matches = any(keyword in lowered for keyword in self.match_url_keywords)
+        if self.match_content_keywords:
+            lowered_text = (text or "").lower()
+            content_matches = any(keyword in lowered_text for keyword in self.match_content_keywords)
+
+        if self.match_url_keywords and self.match_content_keywords:
+            if not (url_matches or content_matches):
+                return
+        elif not (url_matches and content_matches):
+                return
         if self.exclude_keywords and any(keyword in lowered for keyword in self.exclude_keywords):
             return
         async with self.print_lock:
@@ -315,7 +329,7 @@ class UrlSpider:
         interesting = is_interesting_url(final_url)
         if not interesting and url_supports_content_label(final_url):
             interesting = has_interesting_content(text)
-        await self.emit(final_url, interesting=interesting)
+        await self.emit(final_url, text=text, interesting=interesting)
         return FetchResult(final_url=final_url, text=text)
 
     async def worker(self, session: AsyncSession) -> None:
@@ -410,9 +424,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Per-request timeout in seconds.",
     )
     parser.add_argument(
-        "--match",
+        "--match-url",
         default="",
-        help='Only print URLs containing these keywords. Comma-separated, e.g. "graphql,api".',
+        help='Only print URLs whose URL string contains these keywords. Comma-separated, e.g. "graphql,api".',
+    )
+    parser.add_argument(
+        "--match-content",
+        default="",
+        help='Only print textual responses whose response body contains these keywords. Comma-separated, e.g. "graphql,api".',
     )
     parser.add_argument(
         "--exclude",
@@ -436,7 +455,8 @@ async def async_main(args: argparse.Namespace) -> int:
         max_pages=max(1, args.max_pages),
         concurrency=max(1, args.concurrency),
         timeout=max(1.0, args.timeout),
-        match_keywords=parse_keywords(args.match),
+        match_url_keywords=parse_keywords(args.match_url),
+        match_content_keywords=parse_keywords(args.match_content),
         exclude_keywords=parse_keywords(args.exclude),
         quiet_interesting=args.s,
     )

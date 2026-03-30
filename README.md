@@ -32,7 +32,7 @@ pip install curl_cffi
 Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/urlspider.git
+git clone https://github.com/bud1mu/urlspider.git
 cd urlspider
 ```
 
@@ -100,10 +100,16 @@ With crawl tuning:
 urlspider https://target.com --max-depth 4 --max-pages 8000 --concurrency 80 --timeout 20
 ```
 
-Only show URLs containing specific keywords:
+Only show URLs whose URL contains specific keywords:
 
 ```bash
-urlspider https://target.com --match "graphql,api"
+urlspider https://target.com --match-url "graphql,api"
+```
+
+Only show textual responses whose body contains specific keywords:
+
+```bash
+urlspider https://target.com --match-content "graphql,api"
 ```
 
 Hide URLs containing specific keywords:
@@ -115,7 +121,7 @@ urlspider https://target.com --exclude ".jpg,.css,.pdf"
 Use both filters together:
 
 ```bash
-urlspider https://target.com --match "graphql,api" --exclude ".jpg,.css,.pdf"
+urlspider https://target.com --match-url "graphql,api" --match-content "query,mutation" --exclude ".jpg,.css,.pdf"
 ```
 
 Hide the interesting suffix:
@@ -130,7 +136,9 @@ urlspider https://target.com -s
 usage: urlspider.py [-h] [--cookie COOKIE] [--header HEADER]
                     [--max-depth MAX_DEPTH] [--max-pages MAX_PAGES]
                     [--concurrency CONCURRENCY] [--timeout TIMEOUT]
-                    [--match MATCH] [--exclude EXCLUDE] [-s]
+                    [--match-url MATCH_URL]
+                    [--match-content MATCH_CONTENT]
+                    [--exclude EXCLUDE] [-s]
                     url
 ```
 
@@ -154,8 +162,11 @@ usage: urlspider.py [-h] [--cookie COOKIE] [--header HEADER]
 - `--timeout`
   Per-request timeout in seconds.
   If a request takes longer than this value, it is treated as failed and the crawler continues with other targets.
-- `--match`
-  Only print URLs containing one or more of the given keywords.
+- `--match-url`
+  Only print URLs whose URL string contains one or more of the given keywords.
+  Use a comma-separated list such as `"graphql,api"`.
+- `--match-content`
+  Only print textual responses whose response body contains one or more of the given keywords.
   Use a comma-separated list such as `"graphql,api"`.
 - `--exclude`
   Do not print URLs containing one or more of the given keywords.
@@ -187,7 +198,8 @@ https://api.target.com/v1/users <- interesting, u should look at this bro
 - concurrency: `40`
 - timeout: `15` seconds
 - user-agent source: `agent.txt`
-- output match filter: disabled by default
+- output URL match filter: disabled by default
+- output content match filter: disabled by default
 - output exclude filter: disabled by default
 - interesting suffix: enabled by default
 
@@ -204,7 +216,11 @@ https://api.target.com/v1/users <- interesting, u should look at this bro
 - The crawler uses regex-based extraction, not a headless browser.
 - URLs generated only at runtime in the browser may not be discovered.
 - The script only prints URLs that return a successful response.
-- `--match` and `--exclude` filter printed output only. Crawling still continues in scope.
+- `--match-url`, `--match-content`, and `--exclude` filter printed output only. Crawling still continues in scope.
+- `--match-url` checks the URL string only.
+- `--match-content` checks the textual response body only. Non-text responses will not match it.
+- If both `--match-url` and `--match-content` are used, a result is printed if either the URL string or the textual response body matches.
+- `--exclude` checks the printed URL only, not the response body.
 - Interesting URL labeling is based on tighter endpoint-oriented patterns such as API, GraphQL, auth, docs, webhook, RPC, and versioned paths.
 
 ## Disclaimer
