@@ -148,6 +148,11 @@ def url_supports_content_label(url: str) -> bool:
     return urlparse(url.lower()).path.endswith(INTERESTING_CONTENT_EXTENSIONS)
 
 
+def contains_any_keyword(value: str, keywords: tuple[str, ...]) -> bool:
+    lowered = value.lower()
+    return any(keyword in lowered for keyword in keywords)
+
+
 def load_user_agents(path: str) -> list[str]:
     try:
         lines = Path(path).read_text(encoding="utf-8", errors="ignore").splitlines()
@@ -231,6 +236,7 @@ class UrlSpider:
         match_url_keywords: tuple[str, ...],
         match_content_keywords: tuple[str, ...],
         exclude_keywords: tuple[str, ...],
+        ignore_keywords: tuple[str, ...],
         quiet_interesting: bool,
     ) -> None:
         self.start_url = start_url
@@ -244,6 +250,7 @@ class UrlSpider:
         self.match_url_keywords = match_url_keywords
         self.match_content_keywords = match_content_keywords
         self.exclude_keywords = exclude_keywords
+        self.ignore_keywords = ignore_keywords
         self.quiet_interesting = quiet_interesting
         self.user_agents = load_user_agents(AGENT_FILE)
         self.visited: set[str] = set()
@@ -258,8 +265,13 @@ class UrlSpider:
         host = urlparse(url).hostname
         return bool(host and host_in_scope(host, self.scope_host))
 
+    def should_ignore(self, url: str) -> bool:
+        return bool(self.ignore_keywords and contains_any_keyword(url, self.ignore_keywords))
+
     async def enqueue(self, url: str, depth: int) -> None:
         if depth > self.max_depth:
+            return
+        if self.should_ignore(url):
             return
         if len(self.visited) + len(self.enqueued) >= self.max_pages:
             return
@@ -284,7 +296,7 @@ class UrlSpider:
                 return
         elif not (url_matches and content_matches):
                 return
-        if self.exclude_keywords and any(keyword in lowered for keyword in self.exclude_keywords):
+        if self.exclude_keywords and contains_any_keyword(lowered, self.exclude_keywords):
             return
         async with self.print_lock:
             if url in self.printed:
@@ -317,6 +329,8 @@ class UrlSpider:
 
         final_url = str(response.url)
         if not self.in_scope(final_url):
+            return None
+        if self.should_ignore(final_url):
             return None
         if response.status_code >= 400:
             return None
@@ -438,6 +452,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help='Do not print URLs containing these keywords. Comma-separated, e.g. ".jpg,.css,.pdf".',
     )
+    parser.add_argument(
+        "--ignore",
+        default="",
+        help='Do not crawl URLs containing these keywords. Comma-separated, e.g. "logout,.jpg,/static/".',
+    )
     parser.add_argument("-s", action="store_true", help="Hide the interesting suffix in output.")
     return parser
 
@@ -458,6 +477,7 @@ async def async_main(args: argparse.Namespace) -> int:
         match_url_keywords=parse_keywords(args.match_url),
         match_content_keywords=parse_keywords(args.match_content),
         exclude_keywords=parse_keywords(args.exclude),
+        ignore_keywords=parse_keywords(args.ignore),
         quiet_interesting=args.s,
     )
     await spider.run()
